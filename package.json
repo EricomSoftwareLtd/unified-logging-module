@@ -2,13 +2,15 @@
   "name": "log-module",
   "version": "0.0.1",
   "dependencies": {
-    "async": "^2.4.1",
-    "bunyan": "^1.8.10",
-    "underscore": "^1.8.3"
+    "async": "^3.1.0",
+    "bunyan": "^1.8.12",
+    "underscore": "^1.9.1",
+    "es-stream": "git+https://github.com/EricomSoftwareLtd/bunyan-elasticsearch.git#master",
+    "js2xmlparser": "^4.0.0"
   },
   "devDependencies": {
     "memory-streams": "^0.1.2",
-    "mocha": "^3.4.2"
+    "mocha": "^6.2.2"
   },
   "bundledDependencies": [],
   "scripts": {
