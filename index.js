@@ -1,6 +1,8 @@
 const Log = require('bunyan');
 const _ = require('underscore');
 
+const CLUSTER_DEF_SYSTEM_ID = "11111111-1111-1111-1111-111111111111";
+const js2xmlparser = require("js2xmlparser");
 
 const legal_log_levels = {
     trace: Log.TRACE,
@@ -11,21 +13,137 @@ const legal_log_levels = {
     fatal: Log.FATAL
 };
 
+function isStdStream(stream) {
+    if (!stream) {
+        return false;
+    }
+
+    if ('fd' in stream && (stream.fd === 1 /* stdout */ || stream.fd === 2 /* stderr */ )) {
+        return true;
+    }
+
+    return false;
+}
+// See documentation on bunyan streams here: https://www.npmjs.com/package/bunyan#streams
+
+function MyStream(stream) {
+    this.stream = stream;
+    this.logLimitBytes = -1;
+
+    if (isStdStream(stream)) {
+        // std is limitted to 64 KBytes (65536 bytes) by bufio maximum buffer size
+        // see 'MaxScanTokenSize’ in https://golang.org/pkg/bufio/#Scanner.Buffer
+        // Limit our logger to 60 KBytes
+        this.logLimitBytes = 60 * 1024;
+    }
+}
+
+MyStream.prototype.write = function (logStr) {
+    // string.length returns the number of characters in the string.
+    // we need to ansure the number of bytes in the string.
+
+    let logIt = false;
+    let logBuf;
+    let logLenBytes;
+    let logLenChars = logStr.length;
+    
+    if (this.logLimitBytes === -1) {
+        logIt = true;
+    }
+    else if ((logLenChars * 4) <= this.logLimitBytes) {
+        // maximum number of bytes a single character can take is 4
+        logIt = true;
+    }
+    else {
+        // need to calculate the actuall number of bytes in the string
+        logBuf = Buffer.from(logStr);
+        logLenBytes = logBuf.length;
+        if (logLenBytes <= this.logLimitBytes) {
+            logIt = true;
+        }
+    }
+
+    if (logIt === true) {
+        this.stream.write(logStr);
+        return;
+    }
+
+    try {
+        // write a 'raw' log to stderr
+
+        // convert the original log from json to xml, so elasticsearcg will not fail to parse it (because we truncate it which yields a broken JSON)
+        // note: angle brackets (“<” and “>”) will show up as u003c and u003e
+
+        let logJson = JSON.parse(logStr);
+        let xmlParseOptions = { 
+            declaration : {
+                include : false
+            },
+            // format: 
+            // { 
+            //     indent : " ", 
+            //     newline: " " 
+            // } 
+        }
+        let logXml = js2xmlparser.parse("TruncatedLog", logJson, xmlParseOptions);
+        let truncatedLogXml = logXml.substring(0, 1024);
+        let newMsg = `**** LOG TRUNCATED. ORIGINAL MESSAGE LENGTH ${logLenBytes} BYTES (${logLenChars} CHARACTERS) **** : ${truncatedLogXml}`
+
+        let newLogJson = {
+            level: 60,  // fatal
+            hostname: logJson.hostname,
+            logType: logJson.logType,
+            logSystemID: logJson.logSystemID,
+            name: logJson.name,
+            pid: logJson.pid,
+            v: logJson.v,
+            time: logJson.time,
+            msg: newMsg
+        }
+
+        let newLogStr = JSON.stringify(newLogJson);
+        newLogStr += "\n"; // without the end-line, stderr will not flush it!
+        process.stderr.write(newLogStr);
+    }
+    catch (err) {
+        process.stderr.write(`Failed handling too long log message: ${err.message}\n`);
+    }
+}
+
 const makeLowLogger = (options) => {
     "use strict";
     const opt = options || {};
-    let streams = undefined;
-    if (opt.streams) {
-        streams = opt.streams
-    } else {
-        streams = [{stream: options.stream || process.stdout}];
-    }
-    const log = Log.createLogger({
-        name: opt.name || 'defaultLogger',
-        level: checkLevelExists(opt.level) || Log.INFO,
-        streams: streams
-    });
 
+    const loggerOptions = {
+        name: opt.name || 'defaultLogger',
+        streams: []
+    }
+    
+    if (!options.stream && !options.streams) {
+        loggerOptions.streams.push ({
+            level: checkLevelExists(opt.level) || Log.INFO,
+            type: 'stream',
+            stream: new MyStream(process.stdout)
+        })
+    }
+    else if (options.stream) {
+        loggerOptions.streams.push ({
+            level: checkLevelExists(opt.level) || Log.INFO,
+            type: options.stream.type === 'raw' ? 'raw' : 'stream',
+            stream: new MyStream(options.stream)
+        })
+    }
+    else {    
+        for (let stream of options.streams) {
+            loggerOptions.streams.push ({
+                level: checkLevelExists(opt.level) || Log.INFO,
+                type: options.stream.type === 'raw' ? 'raw' : 'stream',
+                stream: new MyStream(stream)
+            })
+        }
+    }
+  
+    const log = Log.createLogger(loggerOptions);
 
     if (opt.child) {
         return log.child(opt.child);
@@ -37,17 +155,37 @@ const makeLowLogger = (options) => {
 const makeHighLogger = (options) => {
     "use strict";
     const opt = options || {};
-    let streams = undefined;
-    if (opt.streams) {
-        streams = opt.streams
-    } else {
-        streams = [{stream: options.stream || process.stdout}];
-    }
-    const log = Log.createLogger({
+
+    const loggerOptions = {
         name: opt.name || 'defaultLogger',
-        level: checkLevelExists(opt.level) || Log.ERROR,
-        streams: streams
-    });
+        streams: []
+    }
+    
+    if (!options.stream && !options.streams) {
+        loggerOptions.streams.push ({
+            level: checkLevelExists(opt.level) || Log.ERROR,
+            type: 'stream',
+            stream: new MyStream(process.stderr)
+        })
+    }
+    else if (options.stream) {
+        loggerOptions.streams.push ({
+            level: checkLevelExists(opt.level) || Log.ERROR,
+            type: options.stream.type === 'raw' ? 'raw' : 'stream',
+            stream: new MyStream(options.stream)
+        })
+    }
+    else {    
+        for (let stream of options.streams) {
+            loggerOptions.streams.push ({
+                level: checkLevelExists(opt.level) || Log.ERROR,
+                type: options.stream.type === 'raw' ? 'raw' : 'stream',
+                stream: new MyStream(stream)
+            })
+        }
+    }
+  
+    const log = Log.createLogger(loggerOptions);
 
     if (opt.child) {
         return log.child(opt.child);
@@ -91,7 +229,8 @@ function FlowLoggerManager(options)  {
     "use strict";
     this.flowOptions = options || {};
     this.flowOptions.child = {
-      logType: 'flow'
+      logType: 'flow',
+      logSystemID: process.env.CLUSTER_SYSTEM_ID || CLUSTER_DEF_SYSTEM_ID
     };
     this.generalManager = new GenericLoggerManager(this.flowOptions);
 
@@ -122,13 +261,20 @@ function FlowLoggerManager(options)  {
 
 function ReportLoggerManager(stream) {
     "use strict";
-    this.generalManager = undefined;
-    if(stream) {
-        this.generalManager = new GenericLoggerManager({name: 'Report', level: 'info', stream: stream, child: {logType: 'report'}})
-    } else {
-        this.generalManager = new GenericLoggerManager({name: 'Report', level: 'info', child: {logType: 'report'}});
+    let options = {
+        name: 'Report', 
+        level: 'info', 
+        child: {
+            logType: 'report',
+            logSystemID: process.env.CLUSTER_SYSTEM_ID || CLUSTER_DEF_SYSTEM_ID
+        }
     }
 
+    if (stream) {
+        options.stream = stream;
+    }
+
+    this.generalManager = new GenericLoggerManager(options);
 
     this.report = (...args) => {
         this.generalManager.info(args);
@@ -153,20 +299,22 @@ const getSyslogLevel = (level) => {
 
 function SysLoggerManager(options) {
     "use strict";
+    const EsStream = require('es-stream');
     this.syslogOptions = options || {};
 
-    this.syslogHost = this.syslogOptions.host || 'elk';
-    this.syslogPort = this.syslogOptions.port || 5035;
-    this.syslogOptions.streams = [{
-        level: getSyslogLevel(this.syslogOptions.level),
-        type: 'raw',
-        stream: syslog.createBunyanStream({
-            type: 'tcp',
-            facility: syslog.local0,
-            host: this.syslogHost,
-            port: this.syslogPort
-        })
-    }];
+    this.esHost = this.syslogOptions.host || 'localhost';
+    this.esPort = this.syslogOptions.port || 9200;
+
+    this.syslogOptions.stream = new EsStream({
+        node: `http://${this.esHost}:${this.esPort}`,
+        host: `http://${this.esHost}:${this.esPort}`,
+        templateName: options.templateName || "reports",
+        apiVersion: "7.0",
+        logSystemID: process.env.CLUSTER_SYSTEM_ID || CLUSTER_DEF_SYSTEM_ID
+    })
+
+    this.syslogOptions.stream.type = 'raw';
+    this.syslogOptions.stream.raw = true;
 
     this.generalManager = new GenericLoggerManager(this.syslogOptions);
 
@@ -205,7 +353,8 @@ function SecurityLoggerManager(options) {
     "use strict";
     this.flowOptions = options || {};
     this.flowOptions.child = {
-        logType: 'security'
+        logType: 'security',
+        logSystemID: process.env.CLUSTER_SYSTEM_ID || CLUSTER_DEF_SYSTEM_ID
     };
     this.generalManager = new GenericLoggerManager(this.flowOptions);
 
@@ -244,7 +393,8 @@ function PerformanceLoggerManager(options) {
     "use strict";
     this.flowOptions = options || {};
     this.flowOptions.child = {
-        logType: 'performance'
+        logType: 'performance',
+        logSystemID: process.env.CLUSTER_SYSTEM_ID || CLUSTER_DEF_SYSTEM_ID
     };
     this.generalManager = new GenericLoggerManager(this.flowOptions);
 

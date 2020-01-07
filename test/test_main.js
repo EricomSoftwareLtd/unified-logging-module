@@ -502,3 +502,32 @@ describe('Options Reload tests', () => {
         assert.ok(obj.level == 30, 'Wrong level for report');
     });
 });
+
+describe("Logger child tests", () => {
+    it('should write log via client child', () => {
+        let stream = new streams.WritableStream();
+
+
+    });
+});
+
+describe("Test syslog write to elasticsearch", () => {
+    describe("Long running test", () => {
+        it("shoud write logs during 10 seconds and stop after this", function(done) {
+            lib.logger.setSyslogOptions({
+                level: "debug"
+            });
+            this.timeout(20000);
+            const interval = setInterval(function(){
+                for(var i = 0; i < 100; i++) {
+                    lib.logger.syslog.info({name: "aaaa", message: "bbbbb"});
+                }
+            }, 200);
+
+            setTimeout(function(){
+                clearInterval(interval);
+                done();
+            }, 11000);
+        });
+    });
+});
