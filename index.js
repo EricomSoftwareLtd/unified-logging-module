@@ -317,6 +317,11 @@ function SysLoggerManager(options) {
     this.syslogOptions.stream.raw = true;
 
     this.generalManager = new GenericLoggerManager(this.syslogOptions);
+    this.reportManager = new ReportLoggerManager(this.syslogOptions);
+
+    this.report = (...args) => {
+        this.reportManager.report(args);
+    };
 
     this.info = (...args) => {
         this.generalManager.info(args);
