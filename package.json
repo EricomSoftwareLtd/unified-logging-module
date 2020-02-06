@@ -5,7 +5,7 @@
     "async": "^3.1.0",
     "bunyan": "^1.8.12",
     "underscore": "^1.9.1",
-    "es-stream": "git+https://github.com/EricomSoftwareLtd/bunyan-elasticsearch.git#master",
+    "es-stream": "git+https://github.com/EricomSoftwareLtd/bunyan-elasticsearch.git#syslog-report1",
     "js2xmlparser": "^4.0.0"
   },
   "devDependencies": {
