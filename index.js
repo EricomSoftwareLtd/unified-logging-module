@@ -26,12 +26,12 @@ function isStdStream(stream) {
 }
 
 function moveMsgToFront(logStr) {
-    let logJson = JSON.parse(logStr);
-    let msg = logJson.msg;
-    delete logJson.msg;
-    logStr = JSON.stringify(logJson);
-    logStr = logStr.slice(2); // remove "{
-    logStr = `{"msg":"${msg}","${logStr}`;
+    // let logJson = JSON.parse(logStr);
+    // let msg = logJson.msg;
+    // delete logJson.msg;
+    // logStr = JSON.stringify(logJson);
+    // logStr = logStr.slice(2); // remove "{
+    // logStr = `{"msg":"${msg}","${logStr}`;
 
     return logStr;
 }
