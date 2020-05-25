@@ -24,6 +24,18 @@ function isStdStream(stream) {
 
     return false;
 }
+
+function moveMsgToFront(logStr) {
+    let logJson = JSON.parse(logStr);
+    let msg = logJson.msg;
+    delete logJson.msg;
+    logStr = JSON.stringify(logJson);
+    logStr = logStr.slice(2); // remove "{
+    logStr = `{"msg":"${msg}","${logStr}`;
+
+    return logStr;
+}
+
 // See documentation on bunyan streams here: https://www.npmjs.com/package/bunyan#streams
 
 function MyStream(stream) {
@@ -64,6 +76,7 @@ MyStream.prototype.write = function (logStr) {
     }
 
     if (logIt === true) {
+        logStr = moveMsgToFront(logStr);
         this.stream.write(logStr);
         return;
     }
@@ -102,6 +115,7 @@ MyStream.prototype.write = function (logStr) {
         }
 
         let newLogStr = JSON.stringify(newLogJson);
+        newLogStr = moveMsgToFront(newLogJson);
         newLogStr += "\n"; // without the end-line, stderr will not flush it!
         process.stderr.write(newLogStr);
     }
