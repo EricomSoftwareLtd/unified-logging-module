@@ -31,7 +31,7 @@ function moveMsgToFront(logStr) {
     delete logJson.msg;
     logStr = JSON.stringify(logJson);
     logStr = logStr.slice(2); // remove "{
-    logStr = `{"msg":"${msg}","${logStr}`;
+    logStr = `{"msg":"${msg}","${logStr}\n`;
 
     return logStr;
 }
