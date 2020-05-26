@@ -92,11 +92,10 @@ MyStream.prototype.write = function (logStr) {
             declaration : {
                 include : false
             },
-            // format: 
-            // { 
-            //     indent : " ", 
-            //     newline: " " 
-            // } 
+            format: { 
+                //indent : " ", 
+                newline: " "
+            } 
         }
         let logXml = js2xmlparser.parse("TruncatedLog", logJson, xmlParseOptions);
         let truncatedLogXml = logXml.substring(0, 1024);
