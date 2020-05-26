@@ -31,7 +31,7 @@ function moveMsgToFront(logStr) {
     delete logJson.msg;
     logStr = JSON.stringify(logJson);
     logStr = logStr.slice(2); // remove "{
-    logStr = `{"msg":"${msg}","${logStr}\n`;
+    logStr = `{"msg":"${msg}","${logStr}\n`;    // must end with a new-line, otherwise it will not be flushed out by the stream
 
     return logStr;
 }
@@ -115,8 +115,7 @@ MyStream.prototype.write = function (logStr) {
         }
 
         let newLogStr = JSON.stringify(newLogJson);
-        newLogStr = moveMsgToFront(newLogJson);
-        newLogStr += "\n"; // without the end-line, stderr will not flush it!
+        newLogStr = moveMsgToFront(newLogStr);
         process.stderr.write(newLogStr);
     }
     catch (err) {
