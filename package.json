@@ -2,7 +2,7 @@
   "name": "log-module",
   "version": "0.0.1",
   "dependencies": {
-    "async": "^3.1.0",
+    "async": "^3.2.2",
     "bunyan": "^1.8.12",
     "underscore": "^1.12.1",
     "es-stream": "git+https://github.com/EricomSoftwareLtd/bunyan-elasticsearch.git#master",
