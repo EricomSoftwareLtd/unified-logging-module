@@ -10,7 +10,7 @@
   },
   "devDependencies": {
     "memory-streams": "^0.1.2",
-    "mocha": "^6.2.2"
+    "mocha": "^6.2.3"
   },
   "bundledDependencies": [],
   "scripts": {
